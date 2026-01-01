@@ -1,0 +1,72 @@
+
+name: WinMerge HTML Diff
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install WinMerge (portable ZIP)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $version = '2.16.36'
+          $url = "https://github.com/WinMerge/winmerge/releases/download/v$version/WinMerge-$version-exe.zip"
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'winmerge.zip'
+          $dest = Join-Path $env:GITHUB_WORKSPACE 'WinMerge'
+
+          Write-Host "Downloading WinMerge $version from $url..."
+          Invoke-WebRequest -Uri $url -OutFile $zip
+
+          Write-Host "Expanding archive to $dest..."
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+      - name: Generate HTML diff (full context)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $left   = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v1.arxml'
+          $right  = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v2.arxml'
+          $out    = Join-Path $env:GITHUB_WORKSPACE 'diff.html'
+          $wmExe  = (Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'WinMerge') -Recurse -File -Filter 'WinMergeU.exe' | Select-Object -First 1).FullName
+
+          if (-not $wmExe) { throw "WinMergeU.exe not found under $env:GITHUB_WORKSPACE\WinMerge" }
+          if (-not (Test-Path $left))  { throw "Left file not found: $left" }
+          if (-not (Test-Path $right)) { throw "Right file not found: $right" }
+
+          Write-Host "Using WinMerge: $wmExe"
+          Write-Host "Comparing:"
+          Write-Host " LEFT : $left"
+          Write-Host " RIGHT: $right"
+          Write-Host " Output HTML: $out"
+
+          # Run non-interactive HTML report export
+          & $wmExe $left $right `
+            -or $out `
+            -noninteractive `
+            /cfg DiffContextV2=-1 `
+            /cfg CompareMethod=Contents `
+            /cfg IgnoreWhitespace=0
+            # Optional XML-friendly tweaks:
+            # /cfg IgnoreXmlAttr=1
+            # /cfg ReportTitleLeft="ExampleComponent v1" /cfg ReportTitleRight="ExampleComponent v2"
+
+          if (-not (Test-Path $out)) {
+            throw "Expected report not generated: $out"
+          }
+
+      - name: Upload HTML diff artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmerge-diff
+          path: ${{ github.workspace }}\diff.html
+          if-no-files-found: error
