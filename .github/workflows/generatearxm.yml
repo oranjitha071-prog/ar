@@ -1,0 +1,45 @@
+
+name: WinMerge HTML Diff
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout github repo
+        uses: actions/checkout@v4
+
+      - name: Install WinMerge
+        shell: powershell
+        run: |
+          $url = "https://github.com/WinMerge/winmerge/releases/download/v2.16.36/WinMerge-2.16.36-exe.zip"
+          $zip = "$env:GITHUB_WORKSPACE\winmerge.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:GITHUB_WORKSPACE\WinMerge" -Force
+
+      - name: Generate HTML diff (full context, no duplicate titles)
+        shell: powershell
+        run: |
+          $left   = "${{ github.workspace }}\Files\ExampleComponent_v1.arxml"
+          $right  = "${{ github.workspace }}\Files\ExampleComponent_v2.arxml"
+          $out    = "${{ github.workspace }}\diff.html"
+          $wmExe  = (Get-ChildItem "${{ github.workspace }}\WinMerge" -Recurse -Filter WinMergeU.exe).FullName
+
+          if (-not (Test-Path $left))  { throw "Left file not found: $left" }
+          if (-not (Test-Path $right)) { throw "Right file not found: $right" }
+
+          & "$wmExe" "$left" "$right" `
+            -or "$out" `
+            -noninteractive `
+            /cfg DiffContextV2=-1 `
+            /cfg CompareMethod=Contents `
+            /cfg IgnoreWhitespace=0
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmerge-diff
+          path: diff.html
