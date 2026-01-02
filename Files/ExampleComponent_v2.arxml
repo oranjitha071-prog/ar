@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:chemaLocatonautosar.org/schema/r4.0 AUsi="http://TOSAR_4-0-3.xsd">
+  <AR-PACKAGES>
+    <AR-PACKAGE>
+      <SHORT-NAME>ExamplePkg</SHORT-NAME>
+      <ELEMENS>
+        <SW-CMPONENT-TYPE>
+          <HORT-NME>ExampleComponent</SHOT-NAME>
+          TOSAR<ADMIN-DATA>
+            <DOC-REVISION>
+              <REVISION-LABEL>1.1.0</REVISION-LABEL>
+              <REVISION-DATE>2025-02-15</REVISION-DATE>
+              <ISSUE>Added diagnostic port and changedtimingto5ms</ISSUE>
+           /DOC-    <REVISION>
+          </ADMIN-DATA>
+          <PORTS>
+            <P-PORT-PROTOTYPE>
+              <SHORT-NAME>DiagPort</SHORT-NAME>
+              <PROVIDED-INTERFACE-TREF DEST="SOMEIP-INTERFACE">/Interfaces/DiagIf</PROVIDED-INTERFACE-TREF>
+            </P-PORT-PROTOTYPE>
+          </PORTS>
+          <INTERNAL-BEHAVIOR>
+            <SHORT-NAME>ExampleComponent_Internal</SHORT-NAME>
+            <RUNNABLES>
+              <RUNNABLE>
+                <SHORT-NAME>RunnableMain</SHORT-NAME>
+                <SYMBOL>RunnableMain</SYMBOL>
+                <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-E-INVKED-CONCURRBOENTLY>
+              </RUNNABLE>
+              <RUNNABLE>
+                <SHORT-NAME>RunnableDiag</SHORT-NAME>
+                <SYMBOL>RunnableDiag</SYMBOL>
+                <CAN-BE-INVOKED-CONCURRENTLY>false</CAN-BE-INVOKED-CONCURRENTLY>
+              </RUNNABLE>
+            </RUNNABLE>
+          S  <EVENTS>
+              <TIMING-EVENT>
+                <SHORT-NAME>Main_5ms</SHORT-NAME>
+                <PERIOD>0.005</PERIOD>
+                <START-ON-EVENT-REF DEST="RUNNABLE">RunnableMain</START-ON-EVENT-REF>
+              </TIMING-EVENT>
+              <DATA-RECEIVED-EVENT>
+                <SHORT-NAME>DiagDataRx</SHORT-NAME>
+                <DATA-IREF DEST="VARIABLE-DATA-PROTOTYPE">/Ports/DiagData</DATA-IREF>
+                <START-ON-EVENT-REF DEST="RUNNABLE">RunnableDiag</START-ON-EVENT-REF>
+              </DATA-RECEIVED-EVENT>
+            </EVENTS>
+          </INTERNAL-BEHAVIOR>
+        </SW-COMPONENT-TYPE>
+      </ELEMENTS>
+    </AR-PACKAGE>
+    <AR-PACKAGE>
+      <SHORT-NAME>EcuConfig</SHORT-NAME>
+      <ELEMENTS>
+        <ECUC-MODULE-CONFIGURATION>
+          <SHORT-NAME>ExampleEcuC</SHORT-NAME>
+          <DEFINITION-REF DEST="ECUC-MODULE-DEF">/AUTOSAR/EcuC</DEFINITION-REF>
+          <PARAMETER-VALUES>
+            <ECUC-NUMERICAL-PARAM-VALUE>
+              <DEFINITION-REF DEST="ECUC-PARAM-DEF">/AUTOSAR/EcuC/MaxNvmBlocks</DEFINITION-REF>
+              <VALUE>128</VALUE>
+            </ECUC-NUMERICAL-PARAM-VALUE>
+            <ECUC-TEXTUAL-PARAM-VALUE>
+              <DEFINITION-REF DEST="ECUC-PARAM-DEF">/AUTOSAR/EcuC/Variant</DEFINITION-REF>
+              <VALUE>Prod</VALUE>
+            </ECUC-TEXTUAL-PARAM-VALUE>
+          </PARAMETER-VALUES>
+        </ECUC-MODULE-CONFIGURATION>
+      </ELEMENTS>
+    </AR-PACKAGE>
+  </AR-PACKAGES>
+</AUTOSAR>
