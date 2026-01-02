@@ -19,7 +19,7 @@ jobs:
 
           $version = '2.16.36'
           $url = "https://github.com/WinMerge/winmerge/releases/download/v$version/WinMerge-$version-exe.zip"
-          $zip = Join-Path $env:GITHUB_WORKSPACE 'winmerge.zip'
+          $zip  = Join-Path $env:GITHUB_WORKSPACE 'winmerge.zip'
           $dest = Join-Path $env:GITHUB_WORKSPACE 'WinMerge'
 
           Write-Host "Downloading WinMerge $version from $url..."
@@ -34,39 +34,117 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
+          # Build all paths from the GitHub workspace
           $left   = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v1.arxml'
           $right  = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v2.arxml'
           $out    = Join-Path $env:GITHUB_WORKSPACE 'diff.html'
           $wmExe  = (Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'WinMerge') -Recurse -File -Filter 'WinMergeU.exe' | Select-Object -First 1).FullName
 
           if (-not $wmExe) { throw "WinMergeU.exe not found under $env:GITHUB_WORKSPACE\WinMerge" }
-          if (-not (Test-Path $left))  { throw "Left file not found: $left" }
-          if (-not (Test-Path $right)) { throw "Right file not found: $right" }
+          if (-not (Test-Path -LiteralPath $left))  { throw "Left file not found: $left" }
+          if (-not (Test-Path -LiteralPath $right)) { throw "Right file not found: $right" }
 
           Write-Host "Using WinMerge: $wmExe"
-          Write-Host "Comparing:"
-          Write-Host " LEFT : $left"
-          Write-Host " RIGHT: $right"
-          Write-Host " Output HTML: $out"
+          Write-Host "Comparing:`n LEFT : $left`n RIGHT: $right`n Output HTML: $out"
 
-          # Run non-interactive HTML report export
-          & $wmExe $left $right `
-            -or $out `
-            -noninteractive `
-            /cfg DiffContextV2=-1 `
-            /cfg CompareMethod=Contents `
-            /cfg IgnoreWhitespace=0
-            # Optional XML-friendly tweaks:
-            # /cfg IgnoreXmlAttr=1
-            # /cfg ReportTitleLeft="ExampleComponent v1" /cfg ReportTitleRight="ExampleComponent v2"
+name: WinMerge HTML Diff
 
-          if (-not (Test-Path $out)) {
-            throw "Expected report not generated: $out"
+on:
+  workflow_dispatch:
+
+jobs:
+  diff:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install WinMerge (portable ZIP)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $version = '2.16.36'
+          $url = "https://github.com/WinMerge/winmerge/releases/download/v$version/WinMerge-$version-exe.zip"
+          $zip  = Join-Path $env:GITHUB_WORKSPACE 'winmerge.zip'
+          $dest = Join-Path $env:GITHUB_WORKSPACE 'WinMerge'
+
+          Write-Host "Downloading WinMerge $version from $url..."
+          Invoke-WebRequest -Uri $url -OutFile $zip
+
+          Write-Host "Expanding archive to $dest..."
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+      - name: Generate HTML diff (full context)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Build all paths from the GitHub workspace
+          $left   = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v1.arxml'
+          $right  = Join-Path $env:GITHUB_WORKSPACE 'Files/ExampleComponent_v2.arxml'
+          $out    = Join-Path $env:GITHUB_WORKSPACE 'diff.html'
+          $wmExe  = (Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'WinMerge') -Recurse -File -Filter 'WinMergeU.exe' | Select-Object -First 1).FullName
+
+          if (-not $wmExe) { throw "WinMergeU.exe not found under $env:GITHUB_WORKSPACE\WinMerge" }
+          if (-not (Test-Path -LiteralPath $left))  { throw "Left file not found: $left" }
+          if (-not (Test-Path -LiteralPath $right)) { throw "Right file not found: $right" }
+
+          Write-Host "Using WinMerge: $wmExe"
+          Write-Host "Comparing:`n LEFT : $left`n RIGHT: $right`n Output HTML: $out"
+
+          # Ensure output folder exists
+          $null = New-Item -ItemType Directory -Force -Path (Split-Path -Path $out)
+
+          # Correct WinMerge CLI args:
+          # /or <path>         => HTML report output path (under workspace)
+          # /noninteractive    => exit after generating report
+          # /m Full            => compare by contents ("Full")
+          # /ignorews-         => DO NOT ignore whitespace (use /ignorews to ignore)
+          # /cfg DiffContextV2=-1 => Full context; set to 0 for differences-only
+          $args = @(
+            $left,
+            $right,
+            '/or', $out,
+            '/noninteractive',
+            '/m', 'Full',
+            '/ignorews-',
+            '/cfg', 'DiffContextV2=-1'
+            # To output ONLY differences (no context), replace the line above with:
+            # '/cfg', 'DiffContextV2=0'
+          )
+
+          # Start WinMerge and wait for exit
+          $proc = Start-Process -FilePath $wmExe -ArgumentList $args -PassThru -NoNewWindow
+          $proc.WaitForExit()
+
+          # Poll for file creation; WinMerge may write just after exit
+          $timeoutSec = 20
+          $pollMs     = 250
+          $elapsedMs  = 0
+          while (!(Test-Path -LiteralPath $out) -and ($elapsedMs -lt ($timeoutSec * 1000))) {
+            Start-Sleep -Milliseconds $pollMs
+            $elapsedMs += $pollMs
           }
+
+          if (-not (Test-Path -LiteralPath $out)) {
+            throw "Expected report not generated: $out (waited ${timeoutSec}s)"
+          }
+
+          # Optional sanity check: ensure non-empty HTML
+          if ((Get-Item -LiteralPath $out).Length -lt 100) {
+            throw "Report generated but appears empty: $out"
+          }
+
+          Write-Host "✅ WinMerge HTML report generated: $out"
 
       - name: Upload HTML diff artifact
         uses: actions/upload-artifact@v4
         with:
           name: winmerge-diff
+          # Use the same workspace-based path here
           path: ${{ github.workspace }}\diff.html
           if-no-files-found: error
+
